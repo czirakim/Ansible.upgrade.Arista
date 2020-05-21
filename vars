@@ -25,5 +25,5 @@ target_version: 4.22.5M
 eos_md5: 99023bf39cb53eec586d5f9989188caa
 eos_file_size: 400
 target_file: vEOS-lab-4.22.5M.swi
-swi_url: "ftp:/mihai:admin1234@10.0.0.200/vEOS-lab-4.22.5M.swi"
+swi_url: "ftp:/admin:admin1234@10.0.0.200/vEOS-lab-4.22.5M.swi"
 install_pause: 180

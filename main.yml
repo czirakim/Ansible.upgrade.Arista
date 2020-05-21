@@ -1,0 +1,108 @@
+---
+- hosts: switch2
+  gather_facts: no
+  serial: 1
+  connection: local
+  vars_files:
+    - vars
+  tasks:
+
+  - name: Gather facts about device
+    eos_facts:
+      provider: "{{ provider_cli }}"
+
+  - name: Gather MLAG Facts
+    eos_command:
+      commands:
+        - 'show mlag'
+      provider: '{{ provider }}'
+    register: showmlag
+
+  - name: Get disk space
+    eos_command:
+      commands:
+        - 'show file systems'
+      provider: '{{ provider }}'
+    register: disk_space
+  
+  - set_fact: 
+      current_version: "{{ansible_net_version}}"
+      mlag_status: "{{showmlag['stdout'][0]['state']}}"
+      flash_free_space: "{{disk_space['stdout'][0]['fileSystems'][3].free//1024 }}"
+
+  - set_fact:
+      perform_upgrade: "{{ target_version != current_version and mlag_status == 'active' }}" 
+
+  - name: Check for disk space
+    assert:
+      that:
+        - (flash_free_space | int) > eos_file_size
+      success_msg: "There is enough disk space so the installation will continue."
+      fail_msg: "There is NOT enough disk space."
+
+  - name: print status
+    vars: 
+      msg: |
+           Current version: {{current_version}}
+           MLAG: {{mlag_status}}
+           Perform_upgrade: {{perform_upgrade}}
+    debug:
+      msg: "{{ msg.split('\n')}}"
+
+  - name: Install new SWI
+    eos_command:
+      commands:
+        - 'install source {{ swi_url }} now'
+      provider: '{{ provider }}'
+    when: perform_upgrade
+
+  - name: Gather MD5 info
+    eos_command:
+      commands:
+        - 'verify /md5 flash:{{ target_file }}'
+      provider: '{{ provider }}'
+    register: showMD5
+    when: perform_upgrade
+
+  - name: Check MD5 hash
+    assert: 
+      that:
+        - eos_md5 in showMD5.stdout[0].messages[0]
+      success_msg: "The hash for image version {{ target_version }} is OK"
+      fail_msg: "The hash for image version {{ target_version }} is NOT OK"
+    when: perform_upgrade
+
+  - name: Save config
+    eos_config:
+      save_when: always
+      backup: yes
+      provider: '{{ provider }}'
+    when: perform_upgrade
+
+  - name: Reload the Switch
+    eos_command:
+      commands:
+        - 'reload now'
+      provider: '{{ provider }}'
+    when: "perform_upgrade"
+    ignore_errors: yes
+
+  - name: Wait for switch to come back online
+    wait_for:
+      host={{ ansible_host }}
+      delay={{ install_pause }}
+      port=443
+    when: perform_upgrade
+
+  - name: Gather facts for verification if EOS has been transferred and MD5 sum matches.
+    eos_facts:
+      provider: "{{ provider_cli }}"
+    when: perform_upgrade
+
+  - name: Check EOS Version
+    assert:
+      that:
+        - target_version == ansible_net_version
+      success_msg: "The installation of {{ target_version }} has been succesful"
+      fail_msg: "The installation of {{ target_version }} has FAILED"
+    when: perform_upgrade

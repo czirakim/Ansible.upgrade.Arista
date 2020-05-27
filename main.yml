@@ -7,6 +7,27 @@
     - vars
   tasks:
 
+  - name: Check connection
+    tags: info
+    wait_for:
+      host={{ ansible_host }}
+      port=443
+      timeout=10
+    register: reply
+    ignore_errors: yes
+
+  - name: Enable eAPI with no HTTP, HTTPS at port 443
+    tags: info
+    eos_eapi:
+      state: started
+      http: false
+      https_port: 443
+      local_http: no
+      local_http_port: 80
+      socket: no
+      provider: "{{ provider_cli }}"
+    when: reply.failed == true
+    
   - name: Gather facts about device
     eos_facts:
       provider: "{{ provider_cli }}"

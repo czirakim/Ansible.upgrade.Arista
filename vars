@@ -19,6 +19,7 @@ provider_cli:
   authorize: yes
   use_ssl: no
   transport: cli
+  timeout: 200
 
 # Upgrade related vars
 target_version: 4.22.5M

@@ -26,6 +26,7 @@
       local_http_port: 80
       socket: no
       provider: "{{ provider_cli }}"
+      vrf: MGT
     when: reply.failed == true
     
   - name: Gather facts about device
@@ -45,7 +46,15 @@
         - 'show file systems'
       provider: '{{ provider }}'
     register: disk_space
-  
+
+  - name: interfaces
+    tags: info
+    lineinfile:
+      path: interfaces.txt
+      line: "{{ inventory_hostname, item.key, item.value.description, item.value.lineprotocol }}"
+      insertbefore: BOF
+    loop: "{{ansible_net_interfaces | dict2items }}"
+
   - set_fact: 
       current_version: "{{ansible_net_version}}"
       mlag_status: "{{showmlag['stdout'][0]['state']}}"
@@ -70,9 +79,16 @@
     debug:
       msg: "{{ msg.split('\n')}}"
 
+  - name:  arista file
+    tags: info
+    lineinfile:
+      dest: Arista_pre_checks.txt
+      line: "{{ inventory_hostname }} Hardware model: {{ansible_net_model}}  Current version: {{current_version}}   MLAG: {{mlag_status}}  Free_disk_space :{{flash_free_space}}MB   Perform_upgrade: {{perform_upgrade}}  "
+
   - name: Install new SWI
     eos_command:
       commands:
+        - 'routing-context vrf MGT'
         - 'install source {{ swi_url }} now'
       provider: '{{ provider }}'
     when: perform_upgrade
